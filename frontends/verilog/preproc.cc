@@ -408,15 +408,41 @@ static void strip_trailing_spaces(std::string &dest)
 		dest.pop_back();
 }
 
+// Is this token a comment? next_token rewrites a "//" comment to "/* ... */", so both sorts of
+// comment start with "/*".
+static bool token_is_comment(const std::string &tok)
+{
+	return tok.size() >= 2 && tok[0] == '/' && tok[1] == '*';
+}
+
+// Is this token a (nonempty) run of spaces and tabs? next_token gathers such a run into a single
+// token.
+static bool token_is_space(const std::string &tok)
+{
+	return !tok.empty() && tok.find_first_not_of(" \t") == std::string::npos;
+}
+
 // Read tokens to get one argument (either a macro argument at a callsite or a default argument in a
 // macro definition). Writes the argument to dest. Returns true if we finished with ')' (the end of
 // the argument list); false if we finished with ','.
 static bool read_argument(std::string &dest)
 {
-	skip_spaces();
 	std::vector<char> openers;
 	for (;;) {
 		std::string tok = next_token(true);
+
+		// A comment is a separator, not argument text. Collapse it to a space rather than
+		// dropping it outright, so that it still separates the tokens on either side of it.
+		if (token_is_comment(tok))
+			tok = " ";
+
+		// Whitespace surrounding an argument is not part of it. Dropping whitespace tokens
+		// while dest is still empty handles the indentation of a continuation line as well as
+		// spaces on the callsite's own line: next_token(true) has already passed any newline
+		// on to output_code, so this does not disturb line numbering.
+		if (dest.empty() && token_is_space(tok))
+			continue;
+
 		if (tok == ")") {
 			if (openers.empty()) {
 				strip_trailing_spaces(dest);
@@ -452,6 +478,7 @@ static bool read_argument(std::string &dest)
 		}
 
 		if (tok == "," && openers.empty()) {
+			strip_trailing_spaces(dest);
 			return false;
 		}
 
