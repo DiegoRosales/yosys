@@ -402,6 +402,12 @@ static void input_file(std::istream &f, std::string filename)
 	input_buffer.insert(it, "\n`file_pop\n");
 }
 
+static void strip_trailing_spaces(std::string &dest)
+{
+	while (dest.size() && (dest.back() == ' ' || dest.back() == '\t'))
+		dest.pop_back();
+}
+
 // Read tokens to get one argument (either a macro argument at a callsite or a default argument in a
 // macro definition). Writes the argument to dest. Returns true if we finished with ')' (the end of
 // the argument list); false if we finished with ','.
@@ -413,8 +419,7 @@ static bool read_argument(std::string &dest)
 		std::string tok = next_token(true);
 		if (tok == ")") {
 			if (openers.empty()) {
-				while (dest.size() && (dest.back() == ' ' || dest.back() == '\t'))
-					dest = dest.substr(0, dest.size() - 1);
+				strip_trailing_spaces(dest);
 				return true;
 			}
 			if (openers.back() != '(')
