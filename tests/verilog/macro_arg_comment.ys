@@ -1,0 +1,53 @@
+# A comment separating macro arguments is not part of the argument text, so it must
+# not defeat `` token pasting. The newline-only variants of this are covered by
+# tests/simple/macro_arg_newline.v; they live there because iverilog accepts them and
+# so they can be cross-checked by simulation. iverilog rejects the comment variants
+# below, so they are checked here against yosys alone.
+
+# block comment on the callsite's own line
+logger -expect-no-warnings
+read_verilog -sv -noblackbox <<EOT
+`define MACRO(dummy, x) IDENT_``x``_
+module top(IDENT_Q_);
+	output wire `MACRO(_, /* comment */ Q);
+endmodule
+EOT
+select -assert-count 1 top/w:IDENT_Q_
+
+design -reset
+
+# end-of-line comment, argument on the continuation line
+logger -expect-no-warnings
+read_verilog -sv -noblackbox <<EOT
+`define MACRO(dummy, x) IDENT_``x``_
+module top(IDENT_Q_);
+	output wire `MACRO(_, // comment
+		Q);
+endmodule
+EOT
+select -assert-count 1 top/w:IDENT_Q_
+
+design -reset
+
+# A comment interior to an argument still separates the tokens on either side of it:
+# it collapses to a space rather than vanishing, so this stays "wire w", not "wirew".
+logger -expect-no-warnings
+read_verilog -sv -noblackbox <<EOT
+`define ID(x) x
+module top;
+	`ID(wire/* comment */w);
+endmodule
+EOT
+select -assert-count 1 top/w:w
+
+design -reset
+
+# an argument that is nothing but a comment is an empty argument
+logger -expect-no-warnings
+read_verilog -sv -noblackbox <<EOT
+`define TWO(a, b) wire w_``a``b``_x;
+module top;
+	`TWO( /* c */ , /* d */ )
+endmodule
+EOT
+select -assert-count 1 top/w:w__x

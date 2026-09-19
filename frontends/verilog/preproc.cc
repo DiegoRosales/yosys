@@ -402,19 +402,39 @@ static void input_file(std::istream &f, std::string filename)
 	input_buffer.insert(it, "\n`file_pop\n");
 }
 
+static void strip_trailing_spaces(std::string &dest)
+{
+	while (dest.size() && (dest.back() == ' ' || dest.back() == '\t'))
+		dest.pop_back();
+}
+
+static bool token_is_block_comment(const std::string &tok)
+{
+	return tok.size() >= 2 && tok[0] == '/' && tok[1] == '*';
+}
+
+static bool token_is_space(const std::string &tok)
+{
+	return !tok.empty() && tok.find_first_not_of(" \t") == std::string::npos;
+}
+
 // Read tokens to get one argument (either a macro argument at a callsite or a default argument in a
 // macro definition). Writes the argument to dest. Returns true if we finished with ')' (the end of
 // the argument list); false if we finished with ','.
 static bool read_argument(std::string &dest)
 {
-	skip_spaces();
 	std::vector<char> openers;
 	for (;;) {
 		std::string tok = next_token(true);
+		if (token_is_block_comment(tok))
+			tok = " ";
+
+		if (dest.empty() && token_is_space(tok))
+			continue;
+
 		if (tok == ")") {
 			if (openers.empty()) {
-				while (dest.size() && (dest.back() == ' ' || dest.back() == '\t'))
-					dest = dest.substr(0, dest.size() - 1);
+				strip_trailing_spaces(dest);
 				return true;
 			}
 			if (openers.back() != '(')
@@ -447,6 +467,7 @@ static bool read_argument(std::string &dest)
 		}
 
 		if (tok == "," && openers.empty()) {
+			strip_trailing_spaces(dest);
 			return false;
 		}
 
